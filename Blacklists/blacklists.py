@@ -26,11 +26,9 @@ celery.conf.update(app.config)
 
 @app.route('/')
 def index():
-    print "HERERERERERER1"
     if 'credentials' not in flask.session:
         return flask.redirect(flask.url_for('oauth2callback'))
     credentials = client.OAuth2Credentials.from_json(flask.session['credentials'])
-    print credentials,"HHRHRHRHRHRH"
     if credentials.access_token_expired:
         return flask.redirect(flask.url_for('oauth2callback'))
     else:
@@ -43,6 +41,7 @@ def index():
 @celery.task()
 @app.route('/oauth2callback')
 def oauth2callback():
+    #Read only Access to Gmail
     flow = client.flow_from_clientsecrets(
         '/var/www/Blacklists/Blacklists/client_secrets.json',
         scope='https://www.googleapis.com/auth/gmail.readonly',
@@ -80,8 +79,8 @@ def process_task(self,credentials):
                 page_token = response['nextPageToken']
                 response = gmail_service.users().messages().list(userId='me', q=query, pageToken=page_token).execute()
                 messages.extend(response['messages'])
-	    print "Length of Messages",len(messages)
-	    output_file_handler = open("/var/www/Blacklists/Blacklists/data/"+str(celery.current_task.request.id), 'w')
+	    #Writing to file based on the task identifier generated internally. Note that there is no link the user contributing
+	    output_file_handler = open(+str(celery.current_task.request.id), 'w')
 	    done=0
             total=len(messages)
 	    d={}
@@ -99,13 +98,9 @@ def process_task(self,credentials):
 			continue
 		 temp_ip_candidates = re.findall(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", str(message["payload"]["headers"]))
 	         ip_candidates=[]
-		 #Removing all Private IP addresses
 		 for ip in temp_ip_candidates:
-			try:
-				if ipaddress.ip_address(ip).is_private==False:
-					ip_candidates.append(ip)
-			except:
-				continue
+			if ipaddress.ip_address(ip).is_private==False:
+				ip_candidates.append(ip)
 		 if "headers" not in message["payload"]:
 			continue
 		 #Obtaining the type of Email
